@@ -866,7 +866,7 @@ namespace MCForge
 										{
 											case "theme": level.theme = value; break;
 											case "physics": level.setPhysics(int.Parse(value)); break;
-											case "physics speed": level.speedPhysics = int.Parse(value); break;
+                                            case "physics speed": level.speedPhysics = int.Parse(value); break;
 											case "physics overload": level.overload = int.Parse(value); break;
 											case "finite mode": level.finite = bool.Parse(value); break;
 											case "animal ai": level.ai = bool.Parse(value); break;
@@ -999,7 +999,7 @@ namespace MCForge
 
         public void Physics()
         {
-            int wait = speedPhysics;
+            int wait = 1250;
             while (true)
             {
                 try
@@ -1012,7 +1012,7 @@ namespace MCForge
                     if (physics > 0) CalcPhysics();
 
                     TimeSpan Took = DateTime.Now - Start;
-                    wait = (int)speedPhysics - (int)Took.TotalMilliseconds;
+                    wait = (int)1250 - (int)Took.TotalMilliseconds;
 
                     if (wait < (int)(-overload * 0.75f))
                     {
@@ -1027,7 +1027,7 @@ namespace MCForge
                             Server.s.Log("Physics shutdown on " + name);
                             Server.PopupNotify("Physics shutdown on " + name, System.Windows.Forms.ToolTipIcon.Error);
 
-                            wait = speedPhysics;
+                            wait = 1250;
                         }
                         else
                         {
@@ -1042,7 +1042,7 @@ namespace MCForge
                 }
                 catch
                 {
-                    wait = speedPhysics;
+                    wait = 1250;
                 }
             }
         }
@@ -1493,7 +1493,6 @@ namespace MCForge
 
                                     case Block.water:         //Active_water
                                     case Block.activedeathwater:
-                                        if (C.time < 5) { C.time++; break; }
                                         //initialy checks if block is valid
                                         if (!finite)
                                         {
@@ -1509,6 +1508,8 @@ namespace MCForge
                                                     if (!liquids[C.b][2] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, y, (ushort)(z + 1)), blocks[C.b]); liquids[C.b][2] = true; }
                                                     if (!liquids[C.b][3] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, y, (ushort)(z - 1)), blocks[C.b]); liquids[C.b][3] = true; }
                                                     if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, (ushort)(y - 1), z), blocks[C.b]); liquids[C.b][4] = true; }
+                                                    if (GetTile(x, (ushort)(y + 1), z) == 51)
+                                                        PhysWater(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]);
                                                 }
                                                 else
                                                 {
@@ -1635,7 +1636,7 @@ namespace MCForge
                                     case Block.lava:         //Active_lava
                                     case Block.activedeathlava:
                                         //initialy checks if block is valid
-                                        if (C.time < 4) { C.time++; break; }
+                                        if (C.time < 2) { C.time++; break; }
                                         if (!finite)
                                         {
                                             if (randomFlow)
@@ -1650,15 +1651,8 @@ namespace MCForge
                                                     if (!liquids[C.b][2] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z + 1)), blocks[C.b]); liquids[C.b][2] = true; }
                                                     if (!liquids[C.b][3] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z - 1)), blocks[C.b]); liquids[C.b][3] = true; }
                                                     if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, (ushort)(y - 1), z), blocks[C.b]); liquids[C.b][4] = true; }
-                                                    if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) {
-                                                        //if (GetTile((ushort)(x - 2), y, z) == Block.blackrock &&
-  // GetTile((ushort)(x + 2), y, z) == Block.blackrock &&
-   //GetTile(x, y, (ushort)(z - 2)) == Block.blackrock &&
-   //GetTile(x, y, (ushort)(z + 2)) == Block.blackrock)
-                                                        //{
-                                                            PhysLava(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]); liquids[C.b][4] = true;
-                                                        //}
-                                                    }
+                                                        if (GetTile(x, (ushort)(y + 1), z) == 51)
+                                                        PhysLava(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]);
                                                 }
                                                 else
                                                 {
@@ -1994,7 +1988,6 @@ namespace MCForge
                                         break;
 
                                     case Block.lava_fast:         //lava_fast
-                                        if (C.time < 4) { C.time++; break; }
                                         //initialy checks if block is valid
                                         if (randomFlow)
                                         {
@@ -2007,6 +2000,8 @@ namespace MCForge
                                                 if (!liquids[C.b][2] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z + 1)), Block.lava_fast); liquids[C.b][2] = true; }
                                                 if (!liquids[C.b][3] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z - 1)), Block.lava_fast); liquids[C.b][3] = true; }
                                                 if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, (ushort)(y - 1), z), Block.lava_fast); liquids[C.b][4] = true; }
+                                                if (GetTile(x, (ushort)(y + 1), z) == 51)
+                                                    PhysLava(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]);
                                             }
                                             else
                                             {
@@ -3420,7 +3415,7 @@ namespace MCForge
         private void PhysWater(int b, byte type)
         {
             if (b == -1) { return; }
-            if (blocks[b] == 50) { AddUpdate(b, type, true); return; } 
+            if (blocks[b] == 50 || blocks[b] == 51) { AddUpdate(b, type, true); return; } 
             switch (blocks[b])
             {
                 case 0:
@@ -3432,17 +3427,7 @@ namespace MCForge
 
                 case 9:
                 case 8:    //still_water
-                    if (physics > 1)   //Adv physics changes sand to glass next to lava
-                    {
-                        if (physics != 5)
-                        {
-                            AddUpdate(b, 20);
-                        }
-                    }
-                    else
-                    {
-                        AddCheck(b);
-                    }
+                    if (!PhysSpongeCheck(b)) AddUpdate(b, 20);
                     break;
 
                 case 10:    //hit active_lava
@@ -3479,7 +3464,7 @@ namespace MCForge
         private void PhysLava(int b, byte type)
         {
             if (b == -1) { return; }
-            if (blocks[b] == 50) { AddUpdate(b, type, true); return; } 
+            if (blocks[b] == 50 || blocks[b] == 51) { AddUpdate(b, type, true); return; } 
             if (physics > 1 && physics != 5 && blocks[b] >= 21 && blocks[b] <= 36) { AddUpdate(b, 0); return; } // Adv physics destroys cloth
             switch (blocks[b])
             {
@@ -3856,10 +3841,7 @@ namespace MCForge
 
             if (GetTile((ushort)(x + 1), y, z) == Block.air) dir++;
             if (GetTile((ushort)(x - 1), y, z) == Block.air) dir++;
-            if (up && GetTile(x, (ushort)(y + 1), z) == Block.air)
-            {
-                    dir++;
-            }
+            if (up && GetTile(x, (ushort)(y + 1), z) == Block.air) dir++;
             if (GetTile(x, (ushort)(y - 1), z) == Block.air) dir++;
             if (GetTile(x, y, (ushort)(z + 1)) == Block.air) dir++;
             if (GetTile(x, y, (ushort)(z - 1)) == Block.air) dir++;
