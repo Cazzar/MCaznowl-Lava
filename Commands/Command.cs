@@ -247,6 +247,7 @@ namespace MCForge
             all.Add(new CmdSponges());
             all.Add(new CmdSPlace());
             all.Add(new CmdStairs());
+            all.Add(new CmdStartRound());
             all.Add(new CmdShank());
             all.Add(new CmdStatic());
             all.Add(new CmdStore());

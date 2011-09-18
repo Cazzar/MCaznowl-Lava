@@ -7,18 +7,19 @@ namespace MCForge
     {
         public override string name { get { return "endround"; } }
         public override string shortcut { get { return "er"; } }
-        public override string type { get { return "mod"; } }
+        public override string type { get { return "lava"; } }
         public override bool museumUsable { get { return true; } }
         public override LevelPermission defaultRank { get { return LevelPermission.Operator; } }
         public CmdEndRound() { }
         public override void Use(Player p, string message)
         {
-            Player who = null;
-            if (message == "") { who = p; message = p.name; } else { who = Player.Find(message); }
-            if (Server.infection)
+            if (Server.lava.roundroundActive)
             {
+                Server.lava.mapData.roundTimer.Stop();
                 Server.lava.EndRound();
             }
+            else
+                Player.SendMessage(p, "The round must be active to end the round!");
         }
         public override void Help(Player p)
         {
