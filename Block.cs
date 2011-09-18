@@ -649,7 +649,6 @@ namespace MCForge
                 case redflower:
                 case mushroom:
                 case redmushroom:
-                case Zero:
                 case staircasefull:
                 case staircasestep:
                 case shrub:
