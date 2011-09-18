@@ -1508,7 +1508,7 @@ namespace MCForge
                                                     if (!liquids[C.b][2] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, y, (ushort)(z + 1)), blocks[C.b]); liquids[C.b][2] = true; }
                                                     if (!liquids[C.b][3] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, y, (ushort)(z - 1)), blocks[C.b]); liquids[C.b][3] = true; }
                                                     if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, (ushort)(y - 1), z), blocks[C.b]); liquids[C.b][4] = true; }
-                                                    if (GetTile(x, (ushort)(y + 1), z) == 51)
+                                                    if (GetTile(x, (ushort)(y + 1), z) == 51 || GetTile(x, (ushort)(y + 1), z) == 52)
                                                         PhysWater(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]);
                                                 }
                                                 else
@@ -1651,7 +1651,7 @@ namespace MCForge
                                                     if (!liquids[C.b][2] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z + 1)), blocks[C.b]); liquids[C.b][2] = true; }
                                                     if (!liquids[C.b][3] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z - 1)), blocks[C.b]); liquids[C.b][3] = true; }
                                                     if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, (ushort)(y - 1), z), blocks[C.b]); liquids[C.b][4] = true; }
-                                                        if (GetTile(x, (ushort)(y + 1), z) == 51)
+                                                    if (GetTile(x, (ushort)(y + 1), z) == 51 || GetTile(x, (ushort)(y + 1), z) == 52)
                                                         PhysLava(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]);
                                                 }
                                                 else
@@ -2000,7 +2000,7 @@ namespace MCForge
                                                 if (!liquids[C.b][2] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z + 1)), Block.lava_fast); liquids[C.b][2] = true; }
                                                 if (!liquids[C.b][3] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z - 1)), Block.lava_fast); liquids[C.b][3] = true; }
                                                 if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, (ushort)(y - 1), z), Block.lava_fast); liquids[C.b][4] = true; }
-                                                if (GetTile(x, (ushort)(y + 1), z) == 51)
+                                                if (GetTile(x, (ushort)(y + 1), z) == 51 || GetTile(x, (ushort)(y + 1), z) == 52)
                                                     PhysLava(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]);
                                             }
                                             else
@@ -3415,7 +3415,7 @@ namespace MCForge
         private void PhysWater(int b, byte type)
         {
             if (b == -1) { return; }
-            if (blocks[b] == 50 || blocks[b] == 51) { AddUpdate(b, type, true); return; } 
+            if (blocks[b] == 50 || blocks[b] == 51 || blocks[b] == 52) { AddUpdate(b, type, true); return; } 
             switch (blocks[b])
             {
                 case 0:
@@ -3464,7 +3464,7 @@ namespace MCForge
         private void PhysLava(int b, byte type)
         {
             if (b == -1) { return; }
-            if (blocks[b] == 50 || blocks[b] == 51) { AddUpdate(b, type, true); return; } 
+            if (blocks[b] == 50 || blocks[b] == 51 || blocks[b] == 52) { AddUpdate(b, type, true); return; } 
             if (physics > 1 && physics != 5 && blocks[b] >= 21 && blocks[b] <= 36) { AddUpdate(b, 0); return; } // Adv physics destroys cloth
             switch (blocks[b])
             {

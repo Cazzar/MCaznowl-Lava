@@ -96,6 +96,7 @@ namespace MCForge
         public const byte op_lava = (byte)107;
         public const byte op_lair = (byte)50;
         public const byte lava_raiser = (byte)51;
+        public const byte inv_lava_raiser = (byte)52;
 
         public const byte griefer_stone = (byte)108;
         public const byte lava_sponge = (byte)109;
@@ -330,6 +331,7 @@ namespace MCForge
                     case op_water:
                     case op_lava:
                     case lava_raiser:
+                    case inv_lava_raiser:
                     case blackrock:
 
                     case griefer_stone:
@@ -797,6 +799,7 @@ namespace MCForge
                 case Block.op_air:
                 case Block.op_lair:
                 case Block.lava_raiser:
+                case Block.inv_lava_raiser:
                 case Block.op_brick:
                 case Block.op_cobblestone:
                 case Block.op_glass:
@@ -849,7 +852,7 @@ namespace MCForge
 
         public static bool BuildIn(byte type)
         {
-            if (type == op_water || type == op_lava || type == op_lair || type == lava_raiser || type == lava_timer || Block.portal(type) || Block.mb(type)) return false;
+            if (type == op_water || type == op_lava || type == op_lair || type == lava_raiser || type == inv_lava_raiser || type == lava_timer || Block.portal(type) || Block.mb(type)) return false;
 
             switch (Block.Convert(type))
             {
@@ -1062,6 +1065,7 @@ namespace MCForge
                 case Block.op_air:
                 case Block.op_lair:
                 case Block.lava_raiser:
+                case Block.inv_lava_raiser:
                 case Block.op_water:
 
                 case Block.door:
@@ -1191,6 +1195,7 @@ namespace MCForge
                 case 105: return "op_air";                //TODO
                 case 50: return "op_lair";                //TODO
                 case 51: return "lava_raiser";                //TODO
+                case 52: return "inv_lava_raiser";
                 case 106: return "op_water";              //TODO
                 case 107: return "op_lava";
 
@@ -1430,6 +1435,7 @@ namespace MCForge
                 case "op_air": return 105;                //TODO
                 case "op_lair": return 50;                //TODO
                 case "lava_raiser": return 51;                //TODO
+                case "inv_lava_raiser": return 52;
                 case "op_water": return 106;              //TODO
                 case "op_lava": return 107;
 
@@ -1652,6 +1658,7 @@ namespace MCForge
                 case 106: return Block.waterstill; //Op_water
                 case 99: return Block.lavastill;   //lava_timer
                 case 51: return Block.red;   //lava_raiser
+                case 52: return 0;
                 case 107: return Block.lavastill; //Op_lava
 
                 case 108: return (byte)1; //Griefer_stone
