@@ -17,6 +17,9 @@
 */
 using System;
 
+using System.Text.RegularExpressions;
+using System.IO;
+
 namespace MCForge
 {
     public class CmdKick : Command
@@ -44,13 +47,59 @@ namespace MCForge
                     Player.SendMessage(p, "You cannot kick yourself!");
                     return;
                 }
-                else if (who.group.Permission >= p.group.Permission && p != null) 
-                { 
-                    Player.GlobalChat(p, p.color + p.name + Server.DefaultColor + " tried to kick " + who.color + who.name + " but failed.", false); 
-                    return; 
+                else if (who.group.Permission >= p.group.Permission && p != null)
+                {
+                    Player.GlobalChat(p, p.color + p.name + Server.DefaultColor + " tried to kick " + who.color + who.name + " but failed.", false);
+                    return;
                 }
 
-            who.Kick(message);
+            string reason = "";
+            Regex regex = new Regex(@"^([1-9]|[1-9][0-9]|[1-9][0-9][0-9])$");
+
+            if (message.Substring(message.IndexOf(' ') + 1).Trim().StartsWith("@"))
+            {
+                if (!File.Exists("text/rules.txt"))
+                {
+                    File.WriteAllText("text/rules.txt", "No rules entered yet!");
+                }
+                int rulenumber = 0;
+                try
+                {
+                    rulenumber = int.Parse(message.Substring(message.IndexOf(' ') + 1).Trim().Replace("@", ""));
+                }
+                catch { rulenumber = rulenumber; }
+                StreamReader r = File.OpenText("text/rules.txt");
+                while (!r.EndOfStream)
+                {
+                    string currentline = r.ReadLine();
+                    try
+                    {
+                        if (int.Parse(currentline.Substring(0, 1)) == rulenumber)
+                        {
+                            reason = currentline;
+                            reason = reason.Replace(Convert.ToString(rulenumber) + ". ", "");
+                            who.Kick(reason);
+                            return;
+                        }
+                    }
+                    catch { }
+                }
+
+                if (regex.IsMatch(message))
+                {
+                    p.SendMessage("Invalid Rule Specified.");
+                    return;
+                }
+
+                r.Close();
+                r.Dispose();
+            }
+            else
+            {
+                who.Kick(message);
+            }
+
+            //who.Kick(message);
         }
         public override void Help(Player p)
         {

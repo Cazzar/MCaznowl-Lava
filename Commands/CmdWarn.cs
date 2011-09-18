@@ -6,7 +6,7 @@
 	not use this file except in compliance with the Licenses. You may
 	obtain a copy of the Licenses at
 	
-	http://www.opensource.org/licenses/ecl2.php
+	http://www.osedu.org/licenses/ECL-2.0
 	http://www.gnu.org/licenses/gpl-3.0.html
 	
 	Unless required by applicable law or agreed to in writing,
@@ -16,6 +16,9 @@
 	permissions and limitations under the Licenses.
 */
 using System;
+
+using System.Text.RegularExpressions;
+using System.IO;
 
 namespace MCForge
 {
@@ -27,7 +30,7 @@ namespace MCForge
 
         public override string shortcut { get { return ""; } }
 
-        public override string type { get { return "mod"; } }
+        public override string type { get { return "zombie"; } }
 
         public override bool museumUsable { get { return true; } }
 
@@ -68,21 +71,106 @@ namespace MCForge
                 Player.SendMessage(p, "you can't warn a player equal or higher rank.");
                 return;
             }
-            
+
             // We need a reason
             if (message.Split(' ').Length == 1)
             {
                 // No reason was given
-                reason = "you know why.";
+                reason = " You broke a rule!";
             }
             else
             {
-                reason = message.Substring(message.IndexOf(' ') + 1).Trim();
+                Regex regex = new Regex(@"^([1-9]|[1-9][0-9]|[1-9][0-9][0-9])$");
+                if (message == "") { Help(p); return; }
+
+                if (message.Substring(message.IndexOf(' ') + 1).Trim().StartsWith("@"))
+                {
+                    if (!File.Exists("text/rules.txt"))
+                    {
+                        File.WriteAllText("text/rules.txt", "No rules entered yet!");
+                    }
+                    int rulenumber = 0;
+                    try
+                    {
+                        rulenumber = int.Parse(message.Substring(message.IndexOf(' ') + 1).Trim().Replace("@", ""));
+                    }
+                    catch { rulenumber = rulenumber; }
+                    StreamReader r = File.OpenText("text/rules.txt");
+                    while (!r.EndOfStream)
+                    {
+                        string currentline = r.ReadLine();
+                        try
+                        {
+                            if (int.Parse(currentline.Substring(0, 1)) == rulenumber)
+                            {
+                                reason = currentline;
+                                reason = reason.Replace(Convert.ToString(rulenumber) + ". ", "");
+                                warnedby = (p == null) ? "console" : p.color + p.name;
+                                Player.GlobalMessage(warnedby + " %ewarned " + who.color + who.name + " %ebecause:");
+                                Player.GlobalMessage("&c" + reason);
+                                ushort xg = (ushort)((0.5 + who.level.spawnx) * 32);
+                                ushort yg = (ushort)((1 + who.level.spawny) * 32);
+                                ushort zg = (ushort)((0.5 + who.level.spawnz) * 32);
+                                unchecked
+                                {
+                                    who.SendPos((byte)-1, xg, yg, zg,
+                                                who.level.rotx,
+                                                who.level.roty);
+                                }
+
+                                //Player.SendMessage(who, "Do it again ");
+                                if (who.warn == 0)
+                                {
+                                    Player.SendMessage(who, "Do it again twice and you will get kicked!");
+                                    who.warn = 1;
+                                    return;
+                                }
+                                if (who.warn == 1)
+                                {
+                                    Player.SendMessage(who, "Do it one more time and you will get kicked!");
+                                    who.warn = 2;
+                                    return;
+                                }
+                                if (who.warn == 2)
+                                {
+                                    Player.GlobalMessage(who.color + who.name + " " + Server.DefaultColor + "was warn-kicked by " + warnedby);
+                                    who.warn = 0;
+                                    who.Kick("Kicked! Reason: " + reason + "");
+                                    return;
+                                }
+                                return;
+                            }
+                        }
+                        catch { }
+                    }
+
+                    if (regex.IsMatch(message))
+                    {
+                        p.SendMessage("Invalid Rule Specified.");
+                        return;
+                    }
+
+                    r.Close();
+                    r.Dispose();
+                }
+                else
+                {
+                    reason = message.Substring(message.IndexOf(' ') + 1).Trim();
+                }
             }
 
-            warnedby = (p == null) ? "<CONSOLE>" : p.color + p.name;
+            warnedby = (p == null) ? "console" : p.color + p.name;
             Player.GlobalMessage(warnedby + " %ewarned " + who.color + who.name + " %ebecause:");
             Player.GlobalMessage("&c" + reason);
+            ushort x = (ushort)((0.5 + who.level.spawnx) * 32);
+            ushort y = (ushort)((1 + who.level.spawny) * 32);
+            ushort z = (ushort)((0.5 + who.level.spawnz) * 32);
+            unchecked
+            {
+                who.SendPos((byte)-1, x, y, z,
+                            who.level.rotx,
+                            who.level.roty);
+            }
 
             //Player.SendMessage(who, "Do it again ");
             if (who.warn == 0)
@@ -101,14 +189,15 @@ namespace MCForge
             {
                 Player.GlobalMessage(who.color + who.name + " " + Server.DefaultColor + "was warn-kicked by " + warnedby);
                 who.warn = 0;
-                who.Kick("KICKED BECAUSE " + reason + "");
+                who.Kick("Kicked! Reason: " + reason + "");
                 return;
             }
 
         }
         public override void Help(Player p)
         {
-            Player.SendMessage(p, "/warn - Warns a player.");
+            Player.SendMessage(p, "/warn [player] [reason] - Warns a player.");
+            Player.SendMessage(p, "/warn [player] @[Rule Number] - Warns a player with the text of the rule number.");
         }
     }
 }
