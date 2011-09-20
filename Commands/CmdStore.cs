@@ -165,11 +165,11 @@ namespace MCForge
                         break;
                     case 6:
                             if(p.group.name.ToLower() == "guest" && p.money >= 50)
-                                Command.all.Find("promote").Use(null, p.name);
-                            else if(p.group.name.ToLower() == "builder" && p.money >= 150)
-                                Command.all.Find("promote").Use(null, p.name);
-                            else if(p.group.name.ToLower() == "advbuilder" && p.money >= 300)
-                                Command.all.Find("promote").Use(null, p.name);
+                            { p.money = p.money - 50; Command.all.Find("promote").Use(null, p.name); }
+                            else if (p.group.name.ToLower() == "builder" && p.money >= 150)
+                            { p.money = p.money - 150; Command.all.Find("promote").Use(null, p.name); }
+                            else if (p.group.name.ToLower() == "advbuilder" && p.money >= 300)
+                            { p.money = p.money - 300; Command.all.Find("promote").Use(null, p.name); }
                             else if (p.group.name.ToLower() == "guest" && p.money <= 50)
                                 p.SendMessage("You do not have enough " + Server.moneys);
                             else if (p.group.name.ToLower() == "builder" && p.money <= 150)

@@ -1587,7 +1587,7 @@ namespace MCForge
                 }
 
 
-                if (NoClipcount == 0 && CheckIfInsideBlock(this) && this.group.Permission >= LevelPermission.Operator)
+                if (NoClipcount == 0 && CheckIfInsideBlock(this) && this.group.Permission <= LevelPermission.Operator)
                 {
                     NoClipcount = 1;
                     if (countOfTimes >= 2)
