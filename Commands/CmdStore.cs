@@ -164,20 +164,20 @@ namespace MCForge
                         }
                         break;
                     case 6:
-                        if (p.group.name.ToLower() == "masterbuilder" || p.group.CanExecute(Command.all.Find("shank")))
-                        {
-                            p.SendMessage("You already have the max rank!");
-                            return;
-                        }
-                        if (p.money >= 250)
-                        {
-                            p.money = p.money - 250;
-                            Command.all.Find("promote").Use(null, p.name);
-                        }
-                        else
-                        {
-                            p.SendMessage("You do not have enough " + Server.moneys);
-                        }
+                            if(p.group.name.ToLower() == "guest" && p.money >= 50)
+                                Command.all.Find("promote").Use(null, p.name);
+                            else if(p.group.name.ToLower() == "builder" && p.money >= 150)
+                                Command.all.Find("promote").Use(null, p.name);
+                            else if(p.group.name.ToLower() == "advbuilder" && p.money >= 300)
+                                Command.all.Find("promote").Use(null, p.name);
+                            else if (p.group.name.ToLower() == "guest" && p.money <= 50)
+                                p.SendMessage("You do not have enough " + Server.moneys);
+                            else if (p.group.name.ToLower() == "builder" && p.money <= 150)
+                                p.SendMessage("You do not have enough " + Server.moneys);
+                            else if (p.group.name.ToLower() == "advbuilder" && p.money <= 300)
+                                p.SendMessage("You do not have enough " + Server.moneys);
+                            else
+                                p.SendMessage("You already have the max rank!");
                         break;
                     case 7:
                         if (p.money >= 100)
@@ -244,14 +244,20 @@ namespace MCForge
             p.SendMessage(c.blue + "3. " + Server.DefaultColor + "Lives - 1 " + Server.moneys + " per life");
             p.SendMessage(c.blue + "4. " + Server.DefaultColor + "Sponges - 10 " + Server.moneys + " per sponge");
             p.SendMessage(c.blue + "5. " + Server.DefaultColor + "Sponge Pack - 55 " + Server.moneys + " for 8 sponges");
-            if (p.group.name.ToLower() == "masterbuilder" || p.group.CanExecute(Command.all.Find("shank")))
-            {
-                p.SendMessage(c.blue + "6. " + Server.DefaultColor + "Out of stock");
-            }
-            else
-            {
-                p.SendMessage(c.blue + "6. " + Server.DefaultColor + "Rank Up - 350 " + Server.moneys);
-            }
+                if (p.group.name.ToLower() == "guest" && p.money >= 50)
+                    p.SendMessage(c.blue + "6. " + Server.DefaultColor + "Rank Up - 50 (builder)" + Server.moneys);
+                else if (p.group.name.ToLower() == "builder" && p.money >= 150)
+                    p.SendMessage(c.blue + "6. " + Server.DefaultColor + "Rank Up - 150 (advbuilder)" + Server.moneys);
+                else if (p.group.name.ToLower() == "advbuilder" && p.money >= 300)
+                    p.SendMessage(c.blue + "6. " + Server.DefaultColor + "Rank Up - 300 (masterbuilder" + Server.moneys);
+                else if (p.group.name.ToLower() == "guest" && p.money <= 50)
+                    p.SendMessage("You do not have enough " + Server.moneys + " (50)");
+                else if (p.group.name.ToLower() == "builder" && p.money <= 150)
+                    p.SendMessage("You do not have enough " + Server.moneys + " (150)");
+                else if (p.group.name.ToLower() == "advbuilder" && p.money <= 300)
+                    p.SendMessage("You do not have enough " + Server.moneys + " (300)");
+                else
+                    p.SendMessage("Out of stock!");
 
             p.SendMessage(c.blue + "7. " + Server.DefaultColor + "Login Message - 200 " + Server.moneys);
             p.SendMessage(c.blue + "8. " + Server.DefaultColor + "Logout Message - 200 " + Server.moneys);
