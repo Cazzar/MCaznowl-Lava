@@ -133,6 +133,7 @@ namespace MCForge
             all.Add(new CmdInfected());
             all.Add(new CmdInfo());
             all.Add(new CmdInvincible());
+            all.Add(new CmdInventory());
             all.Add(new CmdIronman());
             all.Add(new CmdJail());
             all.Add(new CmdJoker());
