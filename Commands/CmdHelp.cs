@@ -84,7 +84,10 @@ namespace MCForge
 
                         if (message == "") { Player.SendMessage(p, "No commands of this type are available to you."); break; }
                         Player.SendMessage(p, "Lava commands you may use:");
-                        Player.SendMessage(p, message.Remove(0, 2) + ", " + Group.Find("op").color + "sponge, normal_sponge, op_air, op_lair, lava_raiser, inv_lava_raiser.");
+                        if(p.group.Permission >= LevelPermission.Operator)
+                            Player.SendMessage(p, message.Remove(0, 2) + ", " + Group.Find("op").color + "sponge, normal_sponge, op_air, op_lair, lava_raiser, inv_lava_raiser.");
+                        else
+                            Player.SendMessage(p, message.Remove(0, 2) + ".");
                         break;
                     case "mod": case "moderation":
                         message = "";

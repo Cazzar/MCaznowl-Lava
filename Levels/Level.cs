@@ -1508,7 +1508,7 @@ namespace MCForge
                                                     if (!liquids[C.b][2] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, y, (ushort)(z + 1)), blocks[C.b]); liquids[C.b][2] = true; }
                                                     if (!liquids[C.b][3] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, y, (ushort)(z - 1)), blocks[C.b]); liquids[C.b][3] = true; }
                                                     if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, (ushort)(y - 1), z), blocks[C.b]); liquids[C.b][4] = true; }
-                                                    if (GetTile(x, (ushort)(y + 1), z) == 51 || GetTile(x, (ushort)(y + 1), z) == 52)
+                                                    if (GetTile(x, (ushort)(y + 1), z) == 51 || GetTile(x, (ushort)(y + 1), z) == 51)
                                                         PhysWater(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]);
                                                 }
                                                 else
