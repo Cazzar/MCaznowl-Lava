@@ -110,6 +110,7 @@
     <Compile Include="Commands\CmdGlobal.cs" />
     <Compile Include="Commands\CmdInfect.cs" />
     <Compile Include="Commands\CmdInfected.cs" />
+    <Compile Include="Commands\CmdInventory.cs" />
     <Compile Include="Commands\CmdIronman.cs" />
     <Compile Include="Commands\CmdKillPhysics.cs" />
     <Compile Include="Commands\CmdLavaSurvival.cs" />
