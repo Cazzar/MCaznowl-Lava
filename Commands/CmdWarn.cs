@@ -58,17 +58,10 @@ namespace MCForge
                 return;
             }
 
-            // Don't warn yourself... derp
-            if (who == p)
-            {
-                Player.SendMessage(p, "you can't warn yourself");
-                return;
-            }
-
             // Check the caller's rank
             if (p != null && p.group.Permission <= who.group.Permission)
             {
-                Player.SendMessage(p, "you can't warn a player equal or higher rank.");
+                Player.SendMessage(p, "You can't warn a player equal or higher rank.");
                 return;
             }
 

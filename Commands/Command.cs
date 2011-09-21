@@ -145,6 +145,7 @@ namespace MCForge
             all.Add(new CmdLastCmd());
             all.Add(new CmdLavaSurvival());
             all.Add(new CmdLevels());
+            all.Add(new CmdLick());
             all.Add(new CmdLimit());
             all.Add(new CmdLine());
             all.Add(new CmdLives());
