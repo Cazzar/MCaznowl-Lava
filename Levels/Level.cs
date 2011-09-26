@@ -47,6 +47,7 @@ namespace MCForge
         public static bool cancelload = false;
         public static bool cancelsave = false;
         public static bool cancelphysics = false;
+        public bool cancelunload = false;
         public int id;
         public string name;
         public ushort width; // x
@@ -138,7 +139,6 @@ namespace MCForge
         Dictionary<int, bool[]> liquids = new Dictionary<int, bool[]>(); // Holds random flow data for liqiud physics
 
         //CTF STUFF
-        public CTFGame ctfgame = new CTFGame();
         public bool ctfmode = false;
 
         public int lastCheck = 0;
@@ -170,7 +170,7 @@ namespace MCForge
                 case "flat":
                     for (x = 0; x < width; ++x)
                         for (z = 0; z < height; ++z)
-                            for (y = 0; y < half + 1; ++y)
+                            for (y = 0; y <= half; ++y)
                                 SetTile(x, y, z, y < half ? Block.dirt : Block.grass);
                                 //SetTile(x, y, z, (byte)(y != half ? (y >= half) ? 0 : 3 : 2));
                     break;
@@ -194,6 +194,16 @@ namespace MCForge
                                     SetTile(x, y, z, 7);
                                 else if (x == 0 || x == width - 1 || z == 0 || z == height - 1 || y == 1 || y == depth - 1)
                                     SetTile(x, y, z, rand.Next(100) == 0 ? Block.iron : Block.obsidian);
+                    break;
+
+                case "rainbow":
+                    Random random = useSeed ? new Random(seed) : new Random();
+                    for (x = 0; x < width; ++x)
+                        for (z = 0; z < height; ++z)
+                            for (y = 0; y < depth; ++y) 
+                                if (y == 0 || y == depth - 1 || x == 0 || x == width - 1 || z == 0 || z == height - 1)
+                                SetTile(x,y,z, (byte)random.Next(21, 36));
+
                 	break;
 
                 case "island":
@@ -236,6 +246,12 @@ namespace MCForge
             if (Server.lava.active && Server.lava.map == this) return false;
             if (LevelUnload != null)
                 LevelUnload(this);
+            if (cancelunload)
+            {
+                Server.s.Log("Unload canceled by Plugin! (Map: " + name + ")");
+                cancelunload = false;
+                return false;
+            }
             Player.players.ForEach(delegate(Player pl)
             {
                 if (pl.level == this) Command.all.Find("goto").Use(pl, Server.mainLevel.name);
@@ -253,6 +269,12 @@ namespace MCForge
             }
             catch { }
             Server.levels.Remove(this);
+            try
+            {
+                Gui.Window.thisWindow.UpdateMapList("'");
+            }
+            catch { }
+            this.Dispose();
             GC.Collect();
             GC.WaitForPendingFinalizers();
 
@@ -263,7 +285,8 @@ namespace MCForge
 
         public void saveChanges()
         {
-           /* if (blockCache.Count == 0) return;
+            if (!Server.useMySQL) return;
+            if (blockCache.Count == 0) return;
             List<BlockPos> tempCache = blockCache;
             blockCache = new List<BlockPos>();
 
@@ -277,13 +300,13 @@ namespace MCForge
                 }
                 transaction.Commit();
             }
-            * */
-            List<BlockPos> tempCache = blockCache;
+
             tempCache.Clear();
         }
 
         public byte GetTile(ushort x, ushort y, ushort z)
         {
+            if (blocks == null) return Block.Zero;
             //if (PosToInt(x, y, z) >= blocks.Length) { return null; }
             //Avoid internal overflow
             if (x < 0) { return Block.Zero; }
@@ -302,6 +325,7 @@ namespace MCForge
         }
         public void SetTile(ushort x, ushort y, ushort z, byte type)
         {
+            if (blocks == null) return;
             blocks[x + width * z + width * height * y] = type;
             //blockchanges[x + width * z + width * height * y] = pName;
         }
@@ -435,13 +459,35 @@ namespace MCForge
                 #endregion
 
                 errorLocation = "Map rank checking";
+                if (Owners == "")
+                {
+                    if (p.group.Permission < this.permissionbuild && (!inZone || !AllowBuild))
+                    {
+                        p.SendBlockchange(x, y, z, b);
+                        Player.SendMessage(p, "Must be at least " + PermissionToName(permissionbuild) + " to build here");
+                        return;
+                    }
+                }
 
-		        errorLocation = "Map Max Rank Checking";
+		errorLocation = "Map Max Rank Checking";
+                if (Owners == "")
+                {
+                    if (p.group.Permission > this.perbuildmax && (!inZone || !AllowBuild))
+                    {
+                        if (!p.group.CanExecute(Command.all.Find("perbuildmax")))
+                        {
+                            p.SendBlockchange(x, y, z, b);
+                            Player.SendMessage(p, "Your rank must be " + perbuildmax + " or lower to build here!");
+                            return;
+                        }
+                    }
+                }
 
                 errorLocation = "Block sending";
                 if (Block.Convert(b) != Block.Convert(type) && !Instant)
                     Player.GlobalBlockchange(this, x, y, z, type);
 
+                if (b == Block.sponge && physics > 0 && type != Block.sponge) PhysSpongeRemoved(PosToInt(x, y, z));
                 if (b == Block.lava_sponge && physics > 0 && type != Block.lava_sponge) PhysSpongeRemoved(PosToInt(x, y, z), true);
 
                 errorLocation = "Undo buffer filling";
@@ -492,7 +538,7 @@ namespace MCForge
 
         public static void SaveSettings(Level level)
         {
-            /*try
+            try
             {
                 File.Create("levels/level properties/" + level.name + ".properties").Dispose();
                 using (StreamWriter SW = File.CreateText("levels/level properties/" + level.name + ".properties"))
@@ -528,7 +574,7 @@ namespace MCForge
             catch (Exception e)
             {
                 Server.s.Log("Failed to save level properties!");
-            }*/
+            }
         }
 
         public void Blockchange(ushort x, ushort y, ushort z, byte type, bool overRide = false, string extraInfo = "")    //Block change made by physics
@@ -544,6 +590,9 @@ namespace MCForge
 
                 if (Block.Convert(b) != Block.Convert(type))    //Should save bandwidth sending identical looking blocks, like air/op_air changes.
                     Player.GlobalBlockchange(this, x, y, z, type);
+
+                if (b == Block.sponge && physics > 0 && type != Block.sponge)
+                    PhysSpongeRemoved(PosToInt(x, y, z));
 
                 if (b == Block.lava_sponge && physics > 0 && type != Block.lava_sponge)
                     PhysSpongeRemoved(PosToInt(x, y, z), true);
@@ -595,7 +644,8 @@ namespace MCForge
 
         public void Save(Boolean Override = false)
         {
-            /*string path = "levels/" + name + ".lvl";
+            if (blocks == null) return;
+            string path = "levels/" + name + ".lvl";
             if (LevelSave != null)
             {
                 LevelSave(this);
@@ -656,6 +706,37 @@ namespace MCForge
 
 						gs.Dispose();
 					}
+
+                    // UNCOMPRESSED LEVEL SAVING! DO NOT USE!
+                    /*using (FileStream fs = File.Create(path + ".wtf"))
+                    {
+                        byte[] header = new byte[16];
+                        BitConverter.GetBytes(1874).CopyTo(header, 0);
+                        fs.Write(header, 0, 2);
+
+                        BitConverter.GetBytes(width).CopyTo(header, 0);
+                        BitConverter.GetBytes(height).CopyTo(header, 2);
+                        BitConverter.GetBytes(depth).CopyTo(header, 4);
+                        BitConverter.GetBytes(spawnx).CopyTo(header, 6);
+                        BitConverter.GetBytes(spawnz).CopyTo(header, 8);
+                        BitConverter.GetBytes(spawny).CopyTo(header, 10);
+                        header[12] = rotx; header[13] = roty;
+                        header[14] = (byte)permissionvisit;
+                        header[15] = (byte)permissionbuild;
+                        fs.Write(header, 0, header.Length);
+                        byte[] level = new byte[blocks.Length];
+                        for (int i = 0; i < blocks.Length; ++i)
+                        {
+                            if (blocks[i] < 80)
+                            {
+                                level[i] = blocks[i];
+                            }
+                            else
+                            {
+                                level[i] = Block.SaveConvert(blocks[i]);
+                            }
+                        } fs.Write(level, 0, level.Length); fs.Close();
+                    }*/
                 }
                 else
                 {
@@ -672,7 +753,7 @@ namespace MCForge
             }
 
             GC.Collect();
-            GC.WaitForPendingFinalizers();*/
+            GC.WaitForPendingFinalizers();
         }
 
         public int Backup(bool Forced = false, string backupName = "")
@@ -779,146 +860,144 @@ namespace MCForge
 						rot[1] = header[11];
                     }
 
-					using (Level level = new Level(givenName, vars[0], vars[2], vars[1], "empty"))
+                    Level level = new Level(givenName, vars[0], vars[2], vars[1], "empty");
+					
+                    level.permissionbuild = (LevelPermission)30;
+
+					level.spawnx = vars[3];
+					level.spawnz = vars[4];
+					level.spawny = vars[5];
+					level.rotx = rot[0];
+					level.roty = rot[1];
+
+					level.name = givenName;
+					level.setPhysics(phys);
+
+					byte[] blocks = new byte[level.width * level.height * level.depth];
+					gs.Read(blocks, 0, blocks.Length);
+					level.blocks = blocks;
+					gs.Close();
+
+					level.backedup = true;
+
+					DataTable ZoneDB = MySQL.fillData("SELECT * FROM `Zone" + givenName + "`");
+
+					Zone Zn;
+					for (int i = 0; i < ZoneDB.Rows.Count; ++i)
 					{
-						level.permissionbuild = (LevelPermission)30;
+						Zn.smallX = (ushort)ZoneDB.Rows[i]["SmallX"];
+						Zn.smallY = (ushort)ZoneDB.Rows[i]["SmallY"];
+						Zn.smallZ = (ushort)ZoneDB.Rows[i]["SmallZ"];
+						Zn.bigX = (ushort)ZoneDB.Rows[i]["BigX"];
+						Zn.bigY = (ushort)ZoneDB.Rows[i]["BigY"];
+						Zn.bigZ = (ushort)ZoneDB.Rows[i]["BigZ"];
+						Zn.Owner = ZoneDB.Rows[i]["Owner"].ToString();
+						level.ZoneList.Add(Zn);
+					}
+					ZoneDB.Dispose();
 
-						level.spawnx = vars[3];
-						level.spawnz = vars[4];
-						level.spawny = vars[5];
-						level.rotx = rot[0];
-						level.roty = rot[1];
+					level.jailx = (ushort)(level.spawnx * 32); level.jaily = (ushort)(level.spawny * 32); level.jailz = (ushort)(level.spawnz * 32);
+					level.jailrotx = level.rotx; level.jailroty = level.roty;
 
-						level.name = givenName;
-						level.setPhysics(phys);
+					level.physThread = new Thread(new ThreadStart(level.Physics));
 
-						byte[] blocks = new byte[level.width * level.height * level.depth];
-						gs.Read(blocks, 0, blocks.Length);
-						level.blocks = blocks;
-						gs.Close();
+					try
+					{
+						DataTable foundDB = MySQL.fillData("SELECT * FROM `Portals" + givenName + "`");
 
-						level.backedup = true;
-
-						DataTable ZoneDB = MySQL.fillData("SELECT * FROM `Zone" + givenName + "`");
-
-						Zone Zn;
-						for (int i = 0; i < ZoneDB.Rows.Count; ++i)
+						for (int i = 0; i < foundDB.Rows.Count; ++i)
 						{
-							Zn.smallX = (ushort)ZoneDB.Rows[i]["SmallX"];
-							Zn.smallY = (ushort)ZoneDB.Rows[i]["SmallY"];
-							Zn.smallZ = (ushort)ZoneDB.Rows[i]["SmallZ"];
-							Zn.bigX = (ushort)ZoneDB.Rows[i]["BigX"];
-							Zn.bigY = (ushort)ZoneDB.Rows[i]["BigY"];
-							Zn.bigZ = (ushort)ZoneDB.Rows[i]["BigZ"];
-							Zn.Owner = ZoneDB.Rows[i]["Owner"].ToString();
-							level.ZoneList.Add(Zn);
+							if (!Block.portal(level.GetTile((ushort)foundDB.Rows[i]["EntryX"], (ushort)foundDB.Rows[i]["EntryY"], (ushort)foundDB.Rows[i]["EntryZ"])))
+							{
+								MySQL.executeQuery("DELETE FROM `Portals" + givenName + "` WHERE EntryX=" + foundDB.Rows[i]["EntryX"] + " AND EntryY=" + foundDB.Rows[i]["EntryY"] + " AND EntryZ=" + foundDB.Rows[i]["EntryZ"]);
+							}
 						}
-						ZoneDB.Dispose();
 
-						level.jailx = (ushort)(level.spawnx * 32); level.jaily = (ushort)(level.spawny * 32); level.jailz = (ushort)(level.spawnz * 32);
-						level.jailrotx = level.rotx; level.jailroty = level.roty;
+						foundDB = MySQL.fillData("SELECT * FROM `Messages" + givenName + "`");
 
-						level.physThread = new Thread(new ThreadStart(level.Physics));
-
-						try
+						for (int i = 0; i < foundDB.Rows.Count; ++i)
 						{
-							DataTable foundDB = MySQL.fillData("SELECT * FROM `Portals" + givenName + "`");
-
-							for (int i = 0; i < foundDB.Rows.Count; ++i)
+							if (!Block.mb(level.GetTile((ushort)foundDB.Rows[i]["X"], (ushort)foundDB.Rows[i]["Y"], (ushort)foundDB.Rows[i]["Z"])))
 							{
-								if (!Block.portal(level.GetTile((ushort)foundDB.Rows[i]["EntryX"], (ushort)foundDB.Rows[i]["EntryY"], (ushort)foundDB.Rows[i]["EntryZ"])))
-								{
-									MySQL.executeQuery("DELETE FROM `Portals" + givenName + "` WHERE EntryX=" + foundDB.Rows[i]["EntryX"] + " AND EntryY=" + foundDB.Rows[i]["EntryY"] + " AND EntryZ=" + foundDB.Rows[i]["EntryZ"]);
-								}
+								MySQL.executeQuery("DELETE FROM `Messages" + givenName + "` WHERE X=" + foundDB.Rows[i]["X"] + " AND Y=" + foundDB.Rows[i]["Y"] + " AND Z=" + foundDB.Rows[i]["Z"]);
 							}
-
-							foundDB = MySQL.fillData("SELECT * FROM `Messages" + givenName + "`");
-
-							for (int i = 0; i < foundDB.Rows.Count; ++i)
-							{
-								if (!Block.mb(level.GetTile((ushort)foundDB.Rows[i]["X"], (ushort)foundDB.Rows[i]["Y"], (ushort)foundDB.Rows[i]["Z"])))
-								{
-									MySQL.executeQuery("DELETE FROM `Messages" + givenName + "` WHERE X=" + foundDB.Rows[i]["X"] + " AND Y=" + foundDB.Rows[i]["Y"] + " AND Z=" + foundDB.Rows[i]["Z"]);
-								}
-							}
-							foundDB.Dispose();
 						}
-						catch (Exception e) { Server.ErrorLog(e); }
+						foundDB.Dispose();
+					}
+					catch (Exception e) { Server.ErrorLog(e); }
 
-						try
+					try
+					{
+						string foundLocation;
+						foundLocation = "levels/level properties/" + level.name + ".properties";
+						if (!File.Exists(foundLocation))
 						{
-							string foundLocation;
-							foundLocation = "levels/level properties/" + level.name + ".properties";
-							if (!File.Exists(foundLocation))
-							{
-								foundLocation = "levels/level properties/" + level.name;
-							}
+							foundLocation = "levels/level properties/" + level.name;
+						}
 
-							foreach (string line in File.ReadAllLines(foundLocation))
+						foreach (string line in File.ReadAllLines(foundLocation))
+						{
+							try
 							{
-								try
+								if (line[0] != '#')
 								{
-									if (line[0] != '#')
+									string value = line.Substring(line.IndexOf(" = ") + 3);
+
+									switch (line.Substring(0, line.IndexOf(" = ")).ToLower())
 									{
-										string value = line.Substring(line.IndexOf(" = ") + 3);
+										case "theme": level.theme = value; break;
+										case "physics": level.setPhysics(int.Parse(value)); break;
+										case "physics speed": level.speedPhysics = int.Parse(value); break;
+										case "physics overload": level.overload = int.Parse(value); break;
+										case "finite mode": level.finite = bool.Parse(value); break;
+										case "animal ai": level.ai = bool.Parse(value); break;
+										case "edge water": level.edgeWater = bool.Parse(value); break;
+										case "survival death": level.Death = bool.Parse(value); break;
+										case "fall": level.fall = int.Parse(value); break;
+										case "drown": level.drown = int.Parse(value); break;
+										case "motd": level.motd = value; break;
+										case "jailx": level.jailx = ushort.Parse(value); break;
+										case "jaily": level.jaily = ushort.Parse(value); break;
+										case "jailz": level.jailz = ushort.Parse(value); break;
+										case "unload": level.unload = bool.Parse(value); break;
 
-										switch (line.Substring(0, line.IndexOf(" = ")).ToLower())
-										{
-											case "theme": level.theme = value; break;
-											case "physics": level.setPhysics(int.Parse(value)); break;
-                                            case "physics speed": level.speedPhysics = int.Parse(value); break;
-											case "physics overload": level.overload = int.Parse(value); break;
-											case "finite mode": level.finite = bool.Parse(value); break;
-											case "animal ai": level.ai = bool.Parse(value); break;
-											case "edge water": level.edgeWater = bool.Parse(value); break;
-											case "survival death": level.Death = bool.Parse(value); break;
-											case "fall": level.fall = int.Parse(value); break;
-											case "drown": level.drown = int.Parse(value); break;
-											case "motd": level.motd = value; break;
-											case "jailx": level.jailx = ushort.Parse(value); break;
-											case "jaily": level.jaily = ushort.Parse(value); break;
-											case "jailz": level.jailz = ushort.Parse(value); break;
-											case "unload": level.unload = bool.Parse(value); break;
-
-											case "perbuild":
-                                                if (PermissionFromName(value) != LevelPermission.Null) level.permissionbuild = PermissionFromName(value);
-												break;
-											case "pervisit":
-                                                if (PermissionFromName(value) != LevelPermission.Null) level.permissionvisit = PermissionFromName(value);
-												break;
-											case "perbuildmax":
-                                                if (PermissionFromName(value) != LevelPermission.Null) level.perbuildmax = PermissionFromName(value);
-                                                break;
-                                            case "pervisitmax":
-                                                if (PermissionFromName(value) != LevelPermission.Null) level.pervisitmax = PermissionFromName(value);
-                                                break;
-                                            case "guns":
-                                                level.guns = bool.Parse(value);
-                                               	break;
-                                            case "loadongoto":
-                                                level.loadOnGoto = bool.Parse(value);
-                                                break;
-                                            case "leafdecay":
-                                                level.leafDecay = bool.Parse(value);
-                                                break;
-                                            case "randomflow":
-                                                level.randomFlow = bool.Parse(value);
-                                                break;
-                                            case "growtrees":
-                                                level.growTrees = bool.Parse(value);
-                                                break;
-										}
+										case "perbuild":
+                                            if (PermissionFromName(value) != LevelPermission.Null) level.permissionbuild = PermissionFromName(value);
+											break;
+										case "pervisit":
+                                            if (PermissionFromName(value) != LevelPermission.Null) level.permissionvisit = PermissionFromName(value);
+											break;
+										case "perbuildmax":
+                                            if (PermissionFromName(value) != LevelPermission.Null) level.perbuildmax = PermissionFromName(value);
+                                            break;
+                                        case "pervisitmax":
+                                            if (PermissionFromName(value) != LevelPermission.Null) level.pervisitmax = PermissionFromName(value);
+                                            break;
+                                        case "guns":
+                                            level.guns = bool.Parse(value);
+                                            break;
+                                        case "loadongoto":
+                                            level.loadOnGoto = bool.Parse(value);
+                                            break;
+                                        case "leafdecay":
+                                            level.leafDecay = bool.Parse(value);
+                                            break;
+                                        case "randomflow":
+                                            level.randomFlow = bool.Parse(value);
+                                            break;
+                                        case "growtrees":
+                                            level.growTrees = bool.Parse(value);
+                                            break;
 									}
 								}
-								catch (Exception e) { Server.ErrorLog(e); }
 							}
+							catch (Exception e) { Server.ErrorLog(e); }
 						}
-						catch { }
-
-						Server.s.Log("Level \"" + level.name + "\" loaded.");
-						level.ctfgame.mapOn = level;
-						return level;
 					}
+					catch { }
+
+					Server.s.Log("Level \"" + level.name + "\" loaded.");
+					return level;
                 }
                 catch (Exception ex) { Server.ErrorLog(ex); return null; }
                 finally { fs.Close(); fs.Dispose(); }
@@ -985,7 +1064,7 @@ namespace MCForge
 
         public void setPhysics(int newValue)
         {
-            if (physics == 0 && newValue != 0)
+            if (physics == 0 && newValue != 0 && blocks != null)
             {
                 for (int i = 0; i < blocks.Length; i++)
                     // Optimization hack, since no blocks under 183 ever need a restart
@@ -999,20 +1078,24 @@ namespace MCForge
 
         public void Physics()
         {
-            int wait = 1250;
+            int wait = speedPhysics;
             while (true)
             {
                 try
                 {
                 retry: if (wait > 0) Thread.Sleep(wait);
-                    if (physics == 0 || ListCheck.Count == 0) goto retry;
+                    if (physics == 0 || ListCheck.Count == 0)
+                    {
+                        lastCheck = 0;
+                        goto retry;
+                    }
 
                     DateTime Start = DateTime.Now;
 
                     if (physics > 0) CalcPhysics();
 
                     TimeSpan Took = DateTime.Now - Start;
-                    wait = (int)1250 - (int)Took.TotalMilliseconds;
+                    wait = (int)speedPhysics - (int)Took.TotalMilliseconds;
 
                     if (wait < (int)(-overload * 0.75f))
                     {
@@ -1027,7 +1110,7 @@ namespace MCForge
                             Server.s.Log("Physics shutdown on " + name);
                             Server.PopupNotify("Physics shutdown on " + name, System.Windows.Forms.ToolTipIcon.Error);
 
-                            wait = 1250;
+                            wait = speedPhysics;
                         }
                         else
                         {
@@ -1042,7 +1125,7 @@ namespace MCForge
                 }
                 catch
                 {
-                    wait = 1250;
+                    wait = speedPhysics;
                 }
             }
         }
@@ -1267,7 +1350,6 @@ namespace MCForge
                         {
                             IntToPos(C.b, out x, out y, out z);
                             bool InnerChange = false; bool skip = false;
-                            byte flow = 0;
                             int storedRand = 0;
                             Player foundPlayer = null; int foundNum = 75, currentNum, newNum, oldNum;
                             string foundInfo = C.extraInfo;
@@ -1468,9 +1550,8 @@ namespace MCForge
                                             PhysAir(PosToInt(x, (ushort)(y + 1), z));   //Check block above
                                         }
 
-                                        if (!leafDecay) { C.time = 255; break; }
-                                        if (C.time < rand.Next(20, 100)) { C.time++; break; }
-                                        
+                                        if (!leafDecay) { C.time = 255; leaves.Clear(); break; }
+                                        if (C.time < 5) { if (rand.Next(10) == 0) C.time++; break; }
                                         if (PhysLeaf(C.b)) AddUpdate(C.b, 0);
                                         C.time = 255;
                                         break;
@@ -1487,7 +1568,7 @@ namespace MCForge
 
                                         if (!growTrees) { C.time = 255; break; }
                                         if (C.time < 20) { if (rand.Next(20) == 0) C.time++; break; }
-                                        new MapGenerator().AddTree(this, x, y, z, rand, true, false);
+                                        Server.MapGen.AddTree(this, x, y, z, rand, true, false);
                                         C.time = 255;
                                         break;
 
@@ -1500,16 +1581,20 @@ namespace MCForge
                                             {
                                                 if (!PhysSpongeCheck(C.b))
                                                 {
-                                                    flow = PhysFlowDirections(C.b);
                                                     if (!liquids.ContainsKey(C.b)) liquids.Add(C.b, new bool[5]);
+
                                                     if (GetTile(x, (ushort)(y + 1), z) != Block.Zero) { PhysSandCheck(PosToInt(x, (ushort)(y + 1), z)); }
-                                                    if (!liquids[C.b][0] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt((ushort)(x + 1), y, z), blocks[C.b]); liquids[C.b][0] = true; }
-                                                    if (!liquids[C.b][1] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt((ushort)(x - 1), y, z), blocks[C.b]); liquids[C.b][1] = true; }
-                                                    if (!liquids[C.b][2] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, y, (ushort)(z + 1)), blocks[C.b]); liquids[C.b][2] = true; }
-                                                    if (!liquids[C.b][3] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, y, (ushort)(z - 1)), blocks[C.b]); liquids[C.b][3] = true; }
-                                                    if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) { PhysWater(PosToInt(x, (ushort)(y - 1), z), blocks[C.b]); liquids[C.b][4] = true; }
-                                                    if (GetTile(x, (ushort)(y + 1), z) == 51 || GetTile(x, (ushort)(y + 1), z) == 52)
-                                                        PhysWater(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]);
+                                                    if (!liquids[C.b][0] && rand.Next(4) == 0) { PhysWater(PosToInt((ushort)(x + 1), y, z), blocks[C.b]); liquids[C.b][0] = true; }
+                                                    if (!liquids[C.b][1] && rand.Next(4) == 0) { PhysWater(PosToInt((ushort)(x - 1), y, z), blocks[C.b]); liquids[C.b][1] = true; }
+                                                    if (!liquids[C.b][2] && rand.Next(4) == 0) { PhysWater(PosToInt(x, y, (ushort)(z + 1)), blocks[C.b]); liquids[C.b][2] = true; }
+                                                    if (!liquids[C.b][3] && rand.Next(4) == 0) { PhysWater(PosToInt(x, y, (ushort)(z - 1)), blocks[C.b]); liquids[C.b][3] = true; }
+                                                    if (!liquids[C.b][4] && rand.Next(4) == 0) { PhysWater(PosToInt(x, (ushort)(y - 1), z), blocks[C.b]); liquids[C.b][4] = true; }
+
+                                                    if (!liquids[C.b][0] && !PhysWaterCheck(PosToInt((ushort)(x + 1), y, z))) liquids[C.b][0] = true;
+                                                    if (!liquids[C.b][1] && !PhysWaterCheck(PosToInt((ushort)(x - 1), y, z))) liquids[C.b][1] = true;
+                                                    if (!liquids[C.b][2] && !PhysWaterCheck(PosToInt(x, y, (ushort)(z + 1)))) liquids[C.b][2] = true;
+                                                    if (!liquids[C.b][3] && !PhysWaterCheck(PosToInt(x, y, (ushort)(z - 1)))) liquids[C.b][3] = true;
+                                                    if (!liquids[C.b][4] && !PhysWaterCheck(PosToInt(x, (ushort)(y - 1), z))) liquids[C.b][4] = true;
                                                 }
                                                 else
                                                 {
@@ -1526,6 +1611,7 @@ namespace MCForge
                                             }
                                             else
                                             {
+                                                if (liquids.ContainsKey(C.b)) liquids.Remove(C.b);
                                                 if (!PhysSpongeCheck(C.b))
                                                 {
                                                     if (GetTile(x, (ushort)(y + 1), z) != Block.Zero) { PhysSandCheck(PosToInt(x, (ushort)(y + 1), z)); }
@@ -1545,6 +1631,7 @@ namespace MCForge
                                         }
                                         else
                                         {
+                                            if (liquids.ContainsKey(C.b)) liquids.Remove(C.b);
                                             goto case Block.finiteWater;
                                         }
                                         break;
@@ -1636,23 +1723,27 @@ namespace MCForge
                                     case Block.lava:         //Active_lava
                                     case Block.activedeathlava:
                                         //initialy checks if block is valid
-                                        if (C.time < 2) { C.time++; break; }
+                                        if (C.time < 4) { C.time++; break; }
                                         if (!finite)
                                         {
                                             if (randomFlow)
                                             {
                                                 if (!PhysSpongeCheck(C.b, true))
                                                 {
-                                                    C.time = (byte)rand.Next(1, 4);
-                                                    flow = PhysFlowDirections(C.b);
+                                                    C.time = (byte)rand.Next(3);
                                                     if (!liquids.ContainsKey(C.b)) liquids.Add(C.b, new bool[5]);
-                                                    if (!liquids[C.b][0] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt((ushort)(x + 1), y, z), blocks[C.b]); liquids[C.b][0] = true; }
-                                                    if (!liquids[C.b][1] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt((ushort)(x - 1), y, z), blocks[C.b]); liquids[C.b][1] = true; }
-                                                    if (!liquids[C.b][2] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z + 1)), blocks[C.b]); liquids[C.b][2] = true; }
-                                                    if (!liquids[C.b][3] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z - 1)), blocks[C.b]); liquids[C.b][3] = true; }
-                                                    if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, (ushort)(y - 1), z), blocks[C.b]); liquids[C.b][4] = true; }
-                                                    if (GetTile(x, (ushort)(y + 1), z) == 51 || GetTile(x, (ushort)(y + 1), z) == 52)
-                                                        PhysLava(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]);
+
+                                                    if (!liquids[C.b][0] && rand.Next(4) == 0) { PhysLava(PosToInt((ushort)(x + 1), y, z), blocks[C.b]); liquids[C.b][0] = true; }
+                                                    if (!liquids[C.b][1] && rand.Next(4) == 0) { PhysLava(PosToInt((ushort)(x - 1), y, z), blocks[C.b]); liquids[C.b][1] = true; }
+                                                    if (!liquids[C.b][2] && rand.Next(4) == 0) { PhysLava(PosToInt(x, y, (ushort)(z + 1)), blocks[C.b]); liquids[C.b][2] = true; }
+                                                    if (!liquids[C.b][3] && rand.Next(4) == 0) { PhysLava(PosToInt(x, y, (ushort)(z - 1)), blocks[C.b]); liquids[C.b][3] = true; }
+                                                    if (!liquids[C.b][4] && rand.Next(4) == 0) { PhysLava(PosToInt(x, (ushort)(y - 1), z), blocks[C.b]); liquids[C.b][4] = true; }
+
+                                                    if (!liquids[C.b][0] && !PhysLavaCheck(PosToInt((ushort)(x + 1), y, z))) liquids[C.b][0] = true;
+                                                    if (!liquids[C.b][1] && !PhysLavaCheck(PosToInt((ushort)(x - 1), y, z))) liquids[C.b][1] = true;
+                                                    if (!liquids[C.b][2] && !PhysLavaCheck(PosToInt(x, y, (ushort)(z + 1)))) liquids[C.b][2] = true;
+                                                    if (!liquids[C.b][3] && !PhysLavaCheck(PosToInt(x, y, (ushort)(z - 1)))) liquids[C.b][3] = true;
+                                                    if (!liquids[C.b][4] && !PhysLavaCheck(PosToInt(x, (ushort)(y - 1), z))) liquids[C.b][4] = true;
                                                 }
                                                 else
                                                 {
@@ -1669,6 +1760,7 @@ namespace MCForge
                                             }
                                             else
                                             {
+                                                if (liquids.ContainsKey(C.b)) liquids.Remove(C.b);
                                                 if (!PhysSpongeCheck(C.b, true))
                                                 {
                                                     PhysLava(PosToInt((ushort)(x + 1), y, z), blocks[C.b]);
@@ -1687,6 +1779,7 @@ namespace MCForge
                                         }
                                         else
                                         {
+                                            if (liquids.ContainsKey(C.b)) liquids.Remove(C.b);
                                             goto case Block.finiteWater;
                                         }
                                         break;
@@ -1937,6 +2030,11 @@ namespace MCForge
                                         C.time = 255;
                                         break;
 
+                                    case Block.sponge:    //SPONGE
+                                        PhysSponge(C.b);
+                                        C.time = 255;
+                                        break;
+
                                     case Block.lava_sponge:    //SPONGE
                                         PhysSponge(C.b, true);
                                         C.time = 255;
@@ -1993,15 +2091,19 @@ namespace MCForge
                                         {
                                             if (!PhysSpongeCheck(C.b, true))
                                             {
-                                                flow = PhysFlowDirections(C.b);
                                                 if (!liquids.ContainsKey(C.b)) liquids.Add(C.b, new bool[5]);
-                                                if (!liquids[C.b][0] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt((ushort)(x + 1), y, z), Block.lava_fast); liquids[C.b][0] = true; }
-                                                if (!liquids[C.b][1] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt((ushort)(x - 1), y, z), Block.lava_fast); liquids[C.b][1] = true; }
-                                                if (!liquids[C.b][2] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z + 1)), Block.lava_fast); liquids[C.b][2] = true; }
-                                                if (!liquids[C.b][3] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, y, (ushort)(z - 1)), Block.lava_fast); liquids[C.b][3] = true; }
-                                                if (!liquids[C.b][4] && (rand.Next(6) == 0 || flow < 2)) { PhysLava(PosToInt(x, (ushort)(y - 1), z), Block.lava_fast); liquids[C.b][4] = true; }
-                                                if (GetTile(x, (ushort)(y + 1), z) == 51 || GetTile(x, (ushort)(y + 1), z) == 52)
-                                                    PhysLava(PosToInt(x, (ushort)(y + 1), z), blocks[C.b]);
+
+                                                if (!liquids[C.b][0] && rand.Next(4) == 0) { PhysLava(PosToInt((ushort)(x + 1), y, z), Block.lava_fast); liquids[C.b][0] = true; }
+                                                if (!liquids[C.b][1] && rand.Next(4) == 0) { PhysLava(PosToInt((ushort)(x - 1), y, z), Block.lava_fast); liquids[C.b][1] = true; }
+                                                if (!liquids[C.b][2] && rand.Next(4) == 0) { PhysLava(PosToInt(x, y, (ushort)(z + 1)), Block.lava_fast); liquids[C.b][2] = true; }
+                                                if (!liquids[C.b][3] && rand.Next(4) == 0) { PhysLava(PosToInt(x, y, (ushort)(z - 1)), Block.lava_fast); liquids[C.b][3] = true; }
+                                                if (!liquids[C.b][4] && rand.Next(4) == 0) { PhysLava(PosToInt(x, (ushort)(y - 1), z), Block.lava_fast); liquids[C.b][4] = true; }
+
+                                                if (!liquids[C.b][0] && !PhysLavaCheck(PosToInt((ushort)(x + 1), y, z))) liquids[C.b][0] = true;
+                                                if (!liquids[C.b][1] && !PhysLavaCheck(PosToInt((ushort)(x - 1), y, z))) liquids[C.b][1] = true;
+                                                if (!liquids[C.b][2] && !PhysLavaCheck(PosToInt(x, y, (ushort)(z + 1)))) liquids[C.b][2] = true;
+                                                if (!liquids[C.b][3] && !PhysLavaCheck(PosToInt(x, y, (ushort)(z - 1)))) liquids[C.b][3] = true;
+                                                if (!liquids[C.b][4] && !PhysLavaCheck(PosToInt(x, (ushort)(y - 1), z))) liquids[C.b][4] = true;
                                             }
                                             else
                                             {
@@ -2018,6 +2120,7 @@ namespace MCForge
                                         }
                                         else
                                         {
+                                            if (liquids.ContainsKey(C.b)) liquids.Remove(C.b);
                                             if (!PhysSpongeCheck(C.b, true))
                                             {
                                                 PhysLava(PosToInt((ushort)(x + 1), y, z), Block.lava_fast);
@@ -3415,7 +3518,9 @@ namespace MCForge
         private void PhysWater(int b, byte type)
         {
             if (b == -1) { return; }
-            if (blocks[b] == 50 || blocks[b] == 51 || blocks[b] == 52) { AddUpdate(b, type, true); return; } 
+            ushort x, y, z; IntToPos(b, out x, out y, out z);
+            if (Server.lava.active && Server.lava.map == this && Server.lava.InSafeZone(x, y, z)) { return; }
+
             switch (blocks[b])
             {
                 case 0:
@@ -3423,11 +3528,6 @@ namespace MCForge
                     {
                         AddUpdate(b, type);
                     }
-                    break;
-
-                case 9:
-                case 8:    //still_water
-                    if (!PhysSpongeCheck(b)) AddUpdate(b, 20);
                     break;
 
                 case 10:    //hit active_lava
@@ -3461,11 +3561,56 @@ namespace MCForge
             }
         }
         //================================================================================================================
+        private bool PhysWaterCheck(int b)
+        {
+            if (b == -1) { return false; }
+            ushort x, y, z; IntToPos(b, out x, out y, out z);
+            if (Server.lava.active && Server.lava.map == this && Server.lava.InSafeZone(x, y, z)) { return false; }
+
+            switch (blocks[b])
+            {
+                case 0:
+                    if (!PhysSpongeCheck(b))
+                    {
+                        return true;
+                    }
+                    break;
+
+                case 10:    //hit active_lava
+                case 112:    //hit lava_fast
+                case Block.activedeathlava:
+                    if (!PhysSpongeCheck(b)) { return true; }
+                    break;
+
+                case 6:
+                case 37:
+                case 38:
+                case 39:
+                case 40:
+                    if (physics > 1)   //Adv physics kills flowers and mushrooms in water
+                    {
+                        if (physics != 5)
+                        {
+                            if (!PhysSpongeCheck(b)) { return true; }
+                        }
+                    }
+                    break;
+
+                case 12:    //sand
+                case 13:    //gravel
+                case 110:   //woodfloat
+                    return true;
+            }
+            return false;
+        }
+        //================================================================================================================
         private void PhysLava(int b, byte type)
         {
             if (b == -1) { return; }
-            if (blocks[b] == 50 || blocks[b] == 51 || blocks[b] == 52) { AddUpdate(b, type, true); return; } 
-            if (physics > 1 && physics != 5 && blocks[b] >= 21 && blocks[b] <= 36) { AddUpdate(b, 0); return; } // Adv physics destroys cloth
+            ushort x, y, z; IntToPos(b, out x, out y, out z);
+            if (Server.lava.active && Server.lava.map == this && Server.lava.InSafeZone(x, y, z)) { return; }
+
+            if (physics > 1 && physics != 5 && !PhysSpongeCheck(b, true) && blocks[b] >= 21 && blocks[b] <= 36) { AddUpdate(b, 0); return; } // Adv physics destroys cloth
             switch (blocks[b])
             {
                 case 0:
@@ -3507,23 +3652,58 @@ namespace MCForge
                         if (!PhysSpongeCheck(b, true)) AddUpdate(b, 0);
                     break;
 
-               /* case Block.blackrock:
-                    int temp = 0;
-                    ushort x, y, z;
-                    IntToPos(b, out x, out y, out z);
-                    if (GetTile(Convert.ToUInt16(x), y, z) == Block.blackrock &&
-                        GetTile(Convert.ToUInt16(x + 2), y, z) == Block.blackrock && 
-                        GetTile(x, y, Convert.ToUInt16(z)) == Block.blackrock &&
-                        GetTile(x, y, Convert.ToUInt16(z + 2)) == Block.blackrock)
-                    {
-                        temp = IntOffset(b, 1, 1, 0);
-                        AddUpdate(temp, type);
-                    }
-                    break;*/
-
                 default:
                     break;
             }
+        }
+        //================================================================================================================
+        private bool PhysLavaCheck(int b)
+        {
+            if (b == -1) { return false; }
+            ushort x, y, z; IntToPos(b, out x, out y, out z);
+            if (Server.lava.active && Server.lava.map == this && Server.lava.InSafeZone(x, y, z)) { return false; }
+
+            if (physics > 1 && physics != 5 && !PhysSpongeCheck(b, true) && blocks[b] >= 21 && blocks[b] <= 36) { return true; } // Adv physics destroys cloth
+            switch (blocks[b])
+            {
+                case 0:
+                    return true;
+
+                case 8:    //hit active_water
+                case Block.activedeathwater:
+                    if (!PhysSpongeCheck(b, true)) return true;
+                    break;
+
+                case 12:    //sand
+                    if (physics > 1)   //Adv physics changes sand to glass next to lava
+                    {
+                        if (physics != 5)
+                        {
+                            return true;
+                        }
+                    }
+                    else
+                    {
+                        return true;
+                    }
+                    break;
+
+                case 13:    //gravel
+                    return true;
+
+                case 5:
+                case 6:
+                case 17:
+                case 18:
+                case 37:
+                case 38:
+                case 39:
+                case 40:
+                    if (physics > 1 && physics != 5)   //Adv physics kills flowers and mushrooms plus wood in lava
+                        if (!PhysSpongeCheck(b, true)) return true;
+                    break;
+            }
+            return false;
         }
         //================================================================================================================
         private void PhysAir(int b)
@@ -3654,7 +3834,7 @@ namespace MCForge
                         temp = IntOffset(b, x, y, z);
                         if (GetTile(temp) != Block.Zero)
                         {
-                            if ((GetTile(temp) == 109)) { return true; }
+                            if ((!lava && GetTile(temp) == 19) || (lava && GetTile(temp) == 109)) { return true; }
                         }
                     }
                 }
@@ -3674,7 +3854,7 @@ namespace MCForge
                         temp = IntOffset(b, x, y, z);
                         if (GetTile(temp) != Block.Zero)
                         {
-                            if ((Block.Convert(GetTile(temp)) == 8) || (Block.Convert(GetTile(temp)) == 10)) { AddUpdate(temp, 0); }
+                            if ((!lava && Block.Convert(GetTile(temp)) == 8) || (lava && Block.Convert(GetTile(temp)) == 10)) { AddUpdate(temp, 0); }
                         }
                     }
                 }
@@ -3696,7 +3876,7 @@ namespace MCForge
                             temp = IntOffset(b, x, y, z);
                             if (GetTile(temp) != Block.Zero)
                             {
-                                if ((Block.Convert(GetTile(temp)) == 8) || (Block.Convert(GetTile(temp)) == 10)) { AddCheck(temp); }
+                                if ((!lava && Block.Convert(GetTile(temp)) == 8) || (lava && Block.Convert(GetTile(temp)) == 10)) { AddCheck(temp); }
                             }
                         }
                     }
@@ -3792,7 +3972,7 @@ namespace MCForge
                 }
             }
 
-            for (i = 1; i <= 4; i++)
+            for (i = 1; i <= dist; i++)
             {
                 for (xx = -dist; xx <= dist; xx++)
                 {
@@ -3804,26 +3984,32 @@ namespace MCForge
                             {
                                 if (leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy), (ushort)(z + zz))] == i - 1)
                                 {
-                                    if (leaves[PosToInt((ushort)(x + xx - 1), (ushort)(y + yy), (ushort)(z + zz))] == -2)
+                                    if (leaves.ContainsKey(PosToInt((ushort)(x + xx - 1), (ushort)(y + yy), (ushort)(z + zz))) &&
+                                        leaves[PosToInt((ushort)(x + xx - 1), (ushort)(y + yy), (ushort)(z + zz))] == -2)
                                         leaves[PosToInt((ushort)(x + xx - 1), (ushort)(y + yy), (ushort)(z + zz))] = (sbyte)i;
 
-                                    if (leaves[PosToInt((ushort)(x + xx + 1), (ushort)(y + yy), (ushort)(z + zz))] == -2)
+                                    if (leaves.ContainsKey(PosToInt((ushort)(x + xx + 1), (ushort)(y + yy), (ushort)(z + zz))) &&
+                                        leaves[PosToInt((ushort)(x + xx + 1), (ushort)(y + yy), (ushort)(z + zz))] == -2)
                                         leaves[PosToInt((ushort)(x + xx + 1), (ushort)(y + yy), (ushort)(z + zz))] = (sbyte)i;
 
-                                    if (leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy - 1), (ushort)(z + zz))] == -2)
+                                    if (leaves.ContainsKey(PosToInt((ushort)(x + xx), (ushort)(y + yy - 1), (ushort)(z + zz))) &&
+                                        leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy - 1), (ushort)(z + zz))] == -2)
                                         leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy - 1), (ushort)(z + zz))] = (sbyte)i;
 
-                                    if (leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy + 1), (ushort)(z + zz))] == -2)
+                                    if (leaves.ContainsKey(PosToInt((ushort)(x + xx), (ushort)(y + yy + 1), (ushort)(z + zz))) &&
+                                        leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy + 1), (ushort)(z + zz))] == -2)
                                         leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy + 1), (ushort)(z + zz))] = (sbyte)i;
 
-                                    if (leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy), (ushort)(z + zz - 1))] == -2)
+                                    if (leaves.ContainsKey(PosToInt((ushort)(x + xx), (ushort)(y + yy), (ushort)(z + zz - 1))) &&
+                                        leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy), (ushort)(z + zz - 1))] == -2)
                                         leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy), (ushort)(z + zz - 1))] = (sbyte)i;
 
-                                    if (leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy), (ushort)(z + zz + 1))] == -2)
+                                    if (leaves.ContainsKey(PosToInt((ushort)(x + xx), (ushort)(y + yy), (ushort)(z + zz + 1))) &&
+                                        leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy), (ushort)(z + zz + 1))] == -2)
                                         leaves[PosToInt((ushort)(x + xx), (ushort)(y + yy), (ushort)(z + zz + 1))] = (sbyte)i;
                                 }
                             }
-                            catch { /*Server.s.Log("Leaf decay error!");*/ }
+                            catch { Server.s.Log("Leaf decay error!"); }
                         }
                     }
                 }
@@ -3833,7 +4019,7 @@ namespace MCForge
             return leaves[b] < 0;
         }
         //================================================================================================================
-        private byte PhysFlowDirections(int b, bool up = false)
+        private byte PhysFlowDirections(int b, bool down = true, bool up = false)
         {
             byte dir = 0;
             ushort x, y, z;
@@ -3842,7 +4028,7 @@ namespace MCForge
             if (GetTile((ushort)(x + 1), y, z) == Block.air) dir++;
             if (GetTile((ushort)(x - 1), y, z) == Block.air) dir++;
             if (up && GetTile(x, (ushort)(y + 1), z) == Block.air) dir++;
-            if (GetTile(x, (ushort)(y - 1), z) == Block.air) dir++;
+            if (down && GetTile(x, (ushort)(y - 1), z) == Block.air) dir++;
             if (GetTile(x, y, (ushort)(z + 1)) == Block.air) dir++;
             if (GetTile(x, y, (ushort)(z - 1)) == Block.air) dir++;
 
@@ -3972,6 +4158,7 @@ namespace MCForge
 
         public void MakeExplosion(ushort x, ushort y, ushort z, int size)
         {
+            //DateTime start = DateTime.Now;
             int xx, yy, zz; Random rand = new Random(); byte b;
 
             if (physics < 2) return;
@@ -4017,7 +4204,7 @@ namespace MCForge
                         {
                             AddUpdate(PosToInt((ushort)xx, (ushort)yy, (ushort)zz), Block.smalltnt);
                         }
-                        else if (b == Block.smalltnt || b == Block.bigtnt)
+                        else if (b == Block.smalltnt || b == Block.bigtnt || b == Block.nuketnt)
                         {
                             AddCheck(PosToInt((ushort)xx, (ushort)yy, (ushort)zz));
                         }
@@ -4039,11 +4226,12 @@ namespace MCForge
                         {
                             AddUpdate(PosToInt((ushort)xx, (ushort)yy, (ushort)zz), Block.smalltnt);
                         }
-                        else if (b == Block.smalltnt || b == Block.bigtnt)
+                        else if (b == Block.smalltnt || b == Block.bigtnt || b == Block.nuketnt)
                         {
                             AddCheck(PosToInt((ushort)xx, (ushort)yy, (ushort)zz));
                         }
                     }
+            //Server.s.Log("Explosion: " + (DateTime.Now - start).TotalMilliseconds.ToString());
         }
 
         public void Firework(ushort x, ushort y, ushort z, int size)
@@ -4159,8 +4347,15 @@ namespace MCForge
         public void Dispose()
         {
             //throw new NotImplementedException();
-            // This doesn't do a whole let right now
             Extras.Clear();
+            liquids.Clear();
+            leaves.Clear();
+            ListCheck.Clear();
+            ListUpdate.Clear();
+            UndoBuffer.Clear();
+            blockCache.Clear();
+            ZoneList.Clear();
+            blocks = null;
         }
     }
 }
